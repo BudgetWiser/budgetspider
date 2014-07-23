@@ -27,34 +27,46 @@ def main():
     connect(__dbname, host=__mongoserver, port=__mongoport)
     cleanplus, opengov = [], []
 
+    # Read from cleanplus scraped json file
     for __cleanplus in __cleanlist:
-        # Read from cleanplus scraped json file
         with open(__rootdir + __dirname + __cleanplus + __extension) as f:
             cleanplus.extend(json.load(f))
-            print 'Reading from', __dirname + __cleanplus + __extension, len(cleanplus)
+            print "Reading from", __dirname + __cleanplus + __extension, len(cleanplus)
 
-    # Reduce duplcate entries
-    quicksort(cleanplus, 0, len(cleanplus)-1) 
+    # Reduce duplcate entries in cleanplus
+    for d in cleanplus:
+        del d['index']
     rm_list = []
     for d in range(len(cleanplus)-1):
-        if cleanplus[d] == cleanplus[d+1]:
-            print 'DUPLICATE #1', cleanplus[d]
-            print 'DUPLICATE #2', cleanplus[d+1]
-            break
+        if cleanplus[d] in cleanplus[d+1:]:
+            print 'DUP', cleanplus[d]['service'], cleanplus[d]['year'], cleanplus[d]['department'], cleanplus[d]['team']
             rm_list.append(d)
-        if not cleanplus[d]['index'].isdigit():
-            # print 'NOTNUMBER   ', cleanplus[d]
-            rm_list.append(d)
+        if d%1000 == 0:
+            print d
     rm_list.reverse()
     print "Handling", len(rm_list), "duplicate entries"
     for i in rm_list:
         del cleanplus[i]
-    print 'Reduced to', len(cleanplus)
+    print "Reduced to", len(cleanplus)
 
     # Read from opengov scraped json file
     with open(__rootdir + __dirname + __opengov + __extension) as f:
         opengov = json.load(f)
-        print 'Reading from', __dirname + __opengov + __extension, len(opengov)
+        print "Reading from", __dirname + __opengov + __extension, len(opengov)
+
+    # Remove duplciate entries in opengov
+    rm_list = []
+    for d in range(len(opengov)-1):
+        if opengov[d] in opengov[d+1:]:
+            print 'DUP', opengov[d]['name'], opengov[d]['level_one'], opengov[d]['level_two'], opengov[d]['level_three']
+            rm_list.append(d)
+        if d%1000 == 0:
+            print d
+    rm_list.reverse()
+    print "Handling", len(rm_list), "duplicate entries"
+    for i in rm_list:
+        del opengov[i]
+    print "Reduced to", len(opengov)
 
     # Log cleanplus DB entry
     with switch_collection(Cleanplus, __colcleanplus) as CCleanplus:
@@ -92,8 +104,7 @@ def main():
                 num_saved += 1
             except:
                 print data, len(CCleanplus.objects.all())
-                print c['service'], c['year'], c['department'], c['team']
-                print 'saved', num_saved
+                print c['service'], c['year'], c['department'], c['team'], c['budget_summary']
 
 
     # Log opengov DB entry
@@ -110,7 +121,7 @@ def main():
                 data.save()
             except:
                 print data, len(COpengov.objects.all())
-                print c['service'], c['category_one'], c['category_two'], c['category_three']
+                print c['service'], o['level_one'], o['level_two'], o['level_three']
 
     # Log budgetspider DB entry
     with switch_collection(Budgetspider, __colbudgetspider) as CBudgetspider:
@@ -141,7 +152,7 @@ def main():
                         data.save()
                     except:
                         print data, len(CBudgetspider.objects.all())
-                        print c['service'], c['category_one'], c['category_two'], c['category_three']
+                        print c['service'], o['level_one'], o['level_two'], o['level_three']
                     break
             if not found:
                 err = "\t".join((c['service'], c['year'], c['department'], c['team'], c['budget_summary'])).encode('utf-8')
