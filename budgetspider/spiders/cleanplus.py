@@ -19,7 +19,7 @@ class BudgetspiderSpider(Spider):
             response,
             formname="SaupInfoNewActionForm",
             formdata={
-                'Search_FIS_YEAR': '20140723',
+                'Search_FIS_YEAR': '2014',
             },
             callback=self.parse_content
         ).replace(url="http://cleanplus.seoul.go.kr/saupinfo/SaupInfoNewList.do")

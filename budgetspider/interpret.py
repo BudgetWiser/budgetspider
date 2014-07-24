@@ -23,6 +23,10 @@ __colbudgetspider = "budgetspider"
 __colopengov = "opengov"
 __colcleanplus = "cleanplus"
 
+
+# Labmda function for unicde UTF-8 encoding
+def utf8code (x) : return x.encode('utf-8')
+
 def main():
     connect(__dbname, host=__mongoserver, port=__mongoport)
     cleanplus, opengov = [], []
@@ -33,16 +37,34 @@ def main():
             cleanplus.extend(json.load(f))
             print "Reading from", __dirname + __cleanplus + __extension, len(cleanplus)
 
+    # Populated unpopulated cleanplus json objects
+    for c in cleanplus:
+        if c['start_date'] == '':
+            c['start_date'] = datetime.date(datetime.MINYEAR, 1, 1)
+        if c['end_date'] == '':
+            c['end_date'] = datetime.date(datetime.MINYEAR, 1, 1)
+        if c['budget_assigned'] == '':
+            c['budget_assigned'] = str(0)
+        if c['budget_current'] == '':
+            c['budget_current'] = str(0)
+        if c['budget_contract'] == '':
+            c['budget_contract'] = str(0)
+        if c['budget_spent'] == '':
+            c['budget_spent'] = str(0)
+
     # Reduce duplcate entries in cleanplus
+    print "Reducing duplicate entries"
     for d in cleanplus:
         del d['index']
     rm_list = []
     for d in range(len(cleanplus)-1):
         if cleanplus[d] in cleanplus[d+1:]:
             print 'DUP', cleanplus[d]['service'], cleanplus[d]['year'], cleanplus[d]['department'], cleanplus[d]['team']
+            with open('error/duplicate.txt', 'a') as f:
+                f.write("\t".join(map(utf8code, (cleanplus[d]['service'], cleanplus[d]['year'], cleanplus[d]['department'], cleanplus[d]['team'], cleanplus[d]['budget_assigned'], "\n"))))
             rm_list.append(d)
         if d%1000 == 0:
-            print d
+            print "Reduced", d, "entries"
     rm_list.reverse()
     print "Handling", len(rm_list), "duplicate entries"
     for i in rm_list:
@@ -71,20 +93,8 @@ def main():
     # Log cleanplus DB entry
     with switch_collection(Cleanplus, __colcleanplus) as CCleanplus:
         num_saved, num_unsaved = 0, 0
-        for c in cleanplus:
-            if c['start_date'] == '':
-                c['start_date'] = datetime.date(datetime.MINYEAR, 1, 1)
-            if c['end_date'] == '':
-                c['end_date'] = datetime.date(datetime.MINYEAR, 1, 1)
-            if c['budget_assigned'] == '':
-                c['budget_assigned'] = 0
-            if c['budget_current'] == '':
-                c['budget_current'] = 0
-            if c['budget_contract'] == '':
-                c['budget_contract'] = 0
-            if c['budget_spent'] == '':
-                c['budget_spent'] = 0
 
+        for c in cleanplus:
             data = CCleanplus(
                 service = c['service'],
                 year = c['year'],
@@ -130,7 +140,7 @@ def main():
             found = False
             num_searched += 1
             for o in opengov:
-                if o['name'] == c['service']:
+                if "".join(o['name'].split()) == "".join(c['service'].split()):
                     found = True
                     data = CBudgetspider(
                         service = c['service'],
@@ -155,40 +165,12 @@ def main():
                         print c['service'], o['level_one'], o['level_two'], o['level_three']
                     break
             if not found:
-                err = "\t".join((c['service'], c['year'], c['department'], c['team'], c['budget_summary'])).encode('utf-8')
-                print err
-                num_404 += 1
+                with open("error/unmatched.tsv", 'a') as f:
+                    err = "\t".join((c['service'], c['year'], c['department'], c['team'], c['budget_summary'])).encode('utf-8')
+                    print err
+                    f.write(err + '\n')
+                    num_404 += 1
         print num_404, "items are not matched"
 
-
-# Quicksort implementation.
-def quicksort(my_list, start, end):
-    if start < end:
-        pivot = _partition(my_list, start, end)
-        quicksort(my_list, start, pivot-1)
-        quicksort(my_list, pivot+1, end)
-    return my_list
-
-# Used for quicksort()
-def _partition(my_list, start, end):
-    pivot = int(my_list[start]['index'])
-    left = start+1
-    right = end
-    done = False
-    while not done:
-        while left <= right and int(my_list[left]['index']) <= pivot:
-            left += 1
-        while int(my_list[right]['index']) >= pivot and right >= left:
-            right -= 1
-        if right < left:
-            done = True
-        else:
-            temp = my_list[left]
-            my_list[left] = my_list[right]
-            my_list[right] = temp
-    temp = my_list[start]
-    my_list[start] = my_list[right]
-    my_list[right] = temp
-    return right
 
 main()
