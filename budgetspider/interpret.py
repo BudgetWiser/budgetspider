@@ -18,13 +18,14 @@ __extension = ".json"
 __cleanlist = ["20140719", "2013", "2012", "2011", "2010", "2009", "2008"]
 
 # PyMongo DB settings
-__mongoserver = "localhost"
-__mongoport = 27017
+__mongoserver = "143.248.234.88"
+__mongoport = 17027 # default: 27017
 __dbname = "budgetspider"
 __colbudgetspider = "budgetspider"
 __colopengov = "opengov"
 __colcleanplus = "cleanplus"
 connect(__dbname, host=__mongoserver, port=__mongoport)
+print "Connected to MongoDB server", __mongoserver, __mongoport
 
 # Data JSON objects
 cleanplus, opengov = [], []
@@ -42,21 +43,6 @@ def read_cleanplus():
         with open(__rootdir + __dirname + __cleanplus + __extension) as f:
             cleanplus.extend(json.load(f))
             print "Reading from", __dirname + __cleanplus + __extension, len(cleanplus)
-
-    # Populated unpopulated cleanplus json objects
-    for c in cleanplus:
-        if c['start_date'] == '':
-            c['start_date'] = datetime.date(datetime.MINYEAR, 1, 1)
-        if c['end_date'] == '':
-            c['end_date'] = datetime.date(datetime.MINYEAR, 1, 1)
-        if c['budget_assigned'] == '':
-            c['budget_assigned'] = str(0)
-        if c['budget_current'] == '':
-            c['budget_current'] = str(0)
-        if c['budget_contract'] == '':
-            c['budget_contract'] = str(0)
-        if c['budget_spent'] == '':
-            c['budget_spent'] = str(0)
 
     # Quicksort
     def quicksort(arr):
@@ -79,11 +65,9 @@ def read_cleanplus():
            return less + pivotList + more
     
     # Clear previous duplicate log
-    with open('error/duplicate_cleanplus.tsv', 'w') as f:
-        pass
+    open('error/duplicate_cleanplus.tsv', 'w').close()
 
     # Reduce duplcate entries in cleanplus
-    print "Reducing duplicate entries"
     for d in cleanplus:
         del d['index']
     cleanplus = quicksort(cleanplus)
@@ -98,6 +82,21 @@ def read_cleanplus():
     for i in rm_list:
         del cleanplus[i]
     print "Reduced to", len(cleanplus)
+
+    # Populate missing fields
+    for c in cleanplus:
+        if c['start_date'] == '':
+            c['start_date'] = str(datetime.date(datetime.MINYEAR, 1, 1))
+        if c['end_date'] == '':
+            c['end_date'] = str(datetime.date(datetime.MINYEAR, 1, 1))
+        if c['budget_assigned'] == '':
+            c['budget_assigned'] = str(0)
+        if c['budget_current'] == '':
+            c['budget_current'] = str(0)
+        if c['budget_contract'] == '':
+            c['budget_contract'] = str(0)
+        if c['budget_spent'] == '':
+            c['budget_spent'] = str(0)
 
 
 def read_opengov():
@@ -128,8 +127,7 @@ def read_opengov():
            return less + pivotList + more
 
     # Clear previous duplicate log
-    with open('error/duplicate_opengov.tsv', 'w') as f:
-        pass
+    open('error/duplicate_opengov.tsv', 'w').close()
 
     # Remove duplciate entries in opengov
     opengov = quicksort(opengov)
@@ -171,14 +169,20 @@ def log_cleanplus():
                 data.save()
                 num_saved += 1
             except:
-                print c['service'], c['year'], c['department'], c['team'], c['budget_summary'], len(CCleanplus.objects.all())
-                unsaved.append(d)
+                unsaved.append(c)
                 num_unsaved += 1
+
+        with open('error/unsaved_cleanplus.json', 'w') as f:
+            json.dump(unsaved, f)
+        print "CLEANPLUS: Logged", num_saved, "items,", num_unsaved, "unsaved items"
 
 
 def log_opengov():
     # Log opengov DB entry
     with switch_collection(Opengov, __colopengov) as COpengov:
+        num_saved, num_unsaved = 0, 0
+        unsaved = []
+
         for o in opengov:
             data = COpengov(
                 service = o['name'],
@@ -189,17 +193,18 @@ def log_opengov():
 
             try:
                 data.save()
+                num_saved += 1
             except:
-                print data, len(COpengov.objects.all())
-                print c['service'], o['level_one'], o['level_two'], o['level_three']
+                unsaved.append(o)
+                num_unsaved += 1
+
+        with open('error/unsaved_opengov.json', 'w') as f:
+            json.dump(unsaved, f)
+        print "OPENGOV: Logged", num_saved, "items,", num_unsaved, "unsaved items"
 
 
 # Simulate logging budgetspider DB entries
 def simlog_budgetspider():
-    # Clear previous unmatched records
-    with open("error/unmatched.tsv", 'w') as f:
-        pass
-
     # Small opengov objects
     sopengov = []
     for i in opengov:
@@ -248,56 +253,64 @@ def log_budgetspider():
     with open("error/unmatched.tsv", 'w') as f:
         pass
 
+    # Small opengov objects
+    sopengov = []
+    for i in opengov:
+        sopengov.append(i['name'])
+
+    # Binary search
+    def bsearch(a, x, lo=0, hi=None):
+        hi = hi or len(a)
+        pos = bisect_left(a, x, lo, hi)
+        return (pos if pos != hi and a[pos] == x else -1)
+
     # Log budgetspider DB entry
     with switch_collection(Budgetspider, __colbudgetspider) as CBudgetspider:
-        num_matched, num_unmatched, num_unsaved = 0, 0, 0
-        matched, unmatched, unsaved = [], [], []
+        num_unmatched, num_saved, num_unsaved = 0, 0, 0
+        unmatched, unsaved = [], []
         for c in cleanplus:
             if int(c['year']) < 2010:
                 continue
-            found = False
-            for o in opengov:
-                if "".join(utf8(rm_spchar(o['name'].strip())).split('ㆍ')) == "".join(utf8(rm_spchar(c['service'].strip())).split('ㆍ')):
-                    found = True
-                    data = CBudgetspider(
-                        service = c['service'],
-                        year = c['year'],
-                        start_date = c['start_date'],
-                        end_date = c['end_date'],
-                        department = c['department'],
-                        team = c['team'],
-                        category_one = o['level_one'],
-                        category_two = o['level_two'],
-                        category_three = o['level_three'],
-                        budget_summary = c['budget_summary'],
-                        budget_assigned = c['budget_assigned'],
-                        budget_current = c['budget_current'],
-                        budget_contract = c['budget_contract'],
-                        budget_spent = c['budget_spent']
-                    )
-                    try:
-                        # data.save()
-                        num_matched += 1
-                        matched.append((c, o))
-                    except:
-                        # print c['service'], o['level_one'], o['level_two'], o['level_three']
-                        num_unsaved += 1
-                        unsaved.append((c, o))
-                    break
-            if not found:
+            search_idx = bsearch(sopengov, c['service'])
+            if search_idx != -1 and c['service'] == opengov[search_idx]['name']:
+                data = CBudgetspider(
+                    service = c['service'],
+                    year = c['year'],
+                    start_date = c['start_date'],
+                    end_date = c['end_date'],
+                    department = c['department'],
+                    team = c['team'],
+                    category_one = opengov[search_idx]['level_one'],
+                    category_two = opengov[search_idx]['level_two'],
+                    category_three = opengov[search_idx]['level_three'],
+                    budget_summary = c['budget_summary'],
+                    budget_assigned = c['budget_assigned'],
+                    budget_current = c['budget_current'],
+                    budget_contract = c['budget_contract'],
+                    budget_spent = c['budget_spent']
+                )
+                try:
+                    data.save()
+                    num_saved += 1
+                except:
+                    num_unsaved += 1
+                    unsaved.append((search_idx, c, opengov[search_idx]))
+            else:
                 with open("error/unmatched.tsv", 'a') as f:
-                    print 'NOMATCH', "\t".join(utf8(rm_spchar(c['service'])).split('ㆍ')), len(CBudgetspider.objects.all())
                     err = "\t".join((c['service'], c['year'], c['department'], c['team'], c['budget_summary'])).encode('utf-8')
-                    print err
                     f.write(err + '\n')
                     unmatched.append(c)
                     num_unmatched += 1
-        print num_unmatched, "items are not matched"
+        with open("error/unsaved_budgetspider.json", 'w') as f:
+            json.dump(unsaved, f)
+        with open("error/unmatched_budgetspider.json", 'w') as f:
+            json.dump(unmatched, f)
+        print "BUDGETSPIDER: Logged", num_saved, "items,", num_unsaved, "unsaved items,", num_unmatched, "unmatched items"
 
 
 read_cleanplus()
 read_opengov()
-#log_cleanplus()
-#log_opengov()
-simlog_budgetspider()
-#log_budgetspider()
+log_cleanplus()
+log_opengov()
+#simlog_budgetspider()
+log_budgetspider()
