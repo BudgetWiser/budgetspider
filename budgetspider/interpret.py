@@ -18,8 +18,8 @@ __extension = ".json"
 __cleanlist = ["20140719", "2013", "2012", "2011", "2010", "2009", "2008"]
 
 # PyMongo DB settings
-__mongoserver = "143.248.234.88"
-__mongoport = 17027 # default: 27017
+__mongoserver = "localhost"
+__mongoport = 27017
 __dbname = "budgetspider"
 __colbudgetspider = "budgetspider"
 __colopengov = "opengov"
@@ -174,7 +174,7 @@ def log_cleanplus():
 
         with open('error/unsaved_cleanplus.json', 'w') as f:
             json.dump(unsaved, f)
-        print "CLEANPLUS: Logged", num_saved, "items,", num_unsaved, "unsaved items"
+        print "CLEANPLUS: Logged", num_saved, "items,", num_unsaved, "unsaved items, total:", num_saved+num_unsaved
 
 
 def log_opengov():
@@ -200,7 +200,7 @@ def log_opengov():
 
         with open('error/unsaved_opengov.json', 'w') as f:
             json.dump(unsaved, f)
-        print "OPENGOV: Logged", num_saved, "items,", num_unsaved, "unsaved items"
+        print "OPENGOV: Logged", num_saved, "items,", num_unsaved, "unsaved items, total:", num_saved+num_unsaved
 
 
 # Simulate logging budgetspider DB entries
@@ -266,10 +266,11 @@ def log_budgetspider():
 
     # Log budgetspider DB entry
     with switch_collection(Budgetspider, __colbudgetspider) as CBudgetspider:
-        num_unmatched, num_saved, num_unsaved = 0, 0, 0
+        num_unmatched, num_saved, num_unsaved, num_past = 0, 0, 0, 0
         unmatched, unsaved = [], []
         for c in cleanplus:
             if int(c['year']) < 2010:
+                num_past += 1
                 continue
             search_idx = bsearch(sopengov, c['service'])
             if search_idx != -1 and c['service'] == opengov[search_idx]['name']:
@@ -305,7 +306,7 @@ def log_budgetspider():
             json.dump(unsaved, f)
         with open("error/unmatched_budgetspider.json", 'w') as f:
             json.dump(unmatched, f)
-        print "BUDGETSPIDER: Logged", num_saved, "items,", num_unsaved, "unsaved items,", num_unmatched, "unmatched items"
+        print "BUDGETSPIDER: Logged", num_saved, "items,", num_unsaved, "unsaved items,", num_unmatched, "unmatched items,", num_past, "2008-09 data, total:", num_saved+num_unsaved+num_unmatched+num_past
 
 
 read_cleanplus()

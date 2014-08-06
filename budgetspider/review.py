@@ -21,28 +21,53 @@ def utf8 (x) : return x.encode('utf-8')
 
 
 def calc_sum():
-    total = 0
-    categories = [None]*40
-    budgets = [0]*40
+    years = ['2014']
     with switch_collection(Budgetspider, __colbudgetspider) as CBudgetspider:
-        for i in CBudgetspider.objects(year='2013'):
-            name = (i['category_one'], i['category_two'])
-            if name in categories:
-                budgets[categories.index(name)] += i['budget_assigned']
-                total += i['budget_assigned']
-            else:
-                for j in range(len(categories)):
-                    if categories[j] == None:
-                        categories[j] = name
-                        break
-                budgets[categories.index(name)] += i['budget_assigned']
-                total += i['budget_assigned']
+        for y in years:
+            total_assigned = 0
+            total_summary = 0
+            categories = []
+            budgets_assigned = []
+            budgets_summary = []
+            services = []
 
-    for i in range(len(categories)):
-        if not categories[i] == None:
-            print categories[i][0].encode('utf-8'), categories[i][1].encode('utf-8'), budgets[i]
-    print "TOTAL", total
-    print "num_services", len(CBudgetspider.objects(year='2013'))
+            for i in CBudgetspider.objects(year=y):
+                name = (i['category_one'], i['category_two'], i['category_three'])
+                if name in categories:
+                    budgets_assigned[categories.index(name)] += i['budget_assigned']
+                    budgets_summary[categories.index(name)] += i['budget_summary']
+                    total_assigned += i['budget_assigned']
+                    total_summary += i['budget_summary']
+                else:
+                    categories.append(name)
+                    budgets_assigned.append(i['budget_assigned'])
+                    budgets_summary.append(i['budget_summary'])
+                    total_assigned += i['budget_assigned']
+                    total_summary += i['budget_summary']
+
+            with open("output/category_three_"+y+".tsv", 'w') as f:
+                f.write('\t'.join((utf8('category_one'), utf8('category_two'), utf8('category_three'),\
+                        utf8('assigned'), utf8('summary'), utf8('num_services'))) + '\n')
+                f.close()
+            with open("output/services_"+y+".tsv", 'w') as f:
+                f.write('\t'.join((utf8('service'), utf8('category_one'), utf8('category_two'),\
+                        utf8('category_three'), utf8('assigned'), utf8('summary'))) + 'n')
+                f.close()
+            for i in range(len(categories)):
+                if not categories[i] == None:
+                    with open("output/category_three_"+y+".tsv", 'a') as f:
+                        num_services = CBudgetspider.objects(year=y, category_one=utf8(categories[i][0]),\
+                                category_two=utf8(categories[i][1]), category_three=utf8(categories[i][2])).count()
+                        f.write("\t".join((utf8(categories[i][0]), utf8(categories[i][1]), utf8(categories[i][2]),\
+                                str(budgets_assigned[i]), str(budgets_summary[i]), str(num_services))) + "\n")
+                    with open("output/services_"+y+".tsv", 'a') as f:
+
+                        for b in CBudgetspider.objects(year=y, category_one=utf8(categories[i][0]),\
+                                category_two=utf8(categories[i][1]), category_three=utf8(categories[i][2])):
+                            f.write("\t".join((utf8(b['service']), utf8(categories[i][0]), utf8(categories[i][1]),\
+                                    utf8(categories[i][2]), str(b['budget_assigned']), str(b['budget_summary']))) + "\n")
+
+            print "TOTAL", y, total_assigned, total_summary, len(CBudgetspider.objects(year=y)), "services"
 
 
 def get_service():
@@ -72,6 +97,7 @@ def find_service(_service_name):
                 for pr in map(utf8, (i['service'], i['year'], i['department'])):
                     print pr,
 
-# calc_sum()
+
+calc_sum()
 #get_service()
-find_service('서울 시니어예술제')
+#find_service('서울 시니어예술제')
