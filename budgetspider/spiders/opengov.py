@@ -8,7 +8,10 @@ class BudgetCategorySpider(Spider):
     allowed_domains = [
         "opengov.seoul.go.kr",
     ]
-    start_urls = ["http://opengov.seoul.go.kr/section/list"]
+    start_urls = [
+        "http://opengov.seoul.go.kr/section/list/?syscode=100014"
+    ]
+
 
     '''
     def parse(self, response):
